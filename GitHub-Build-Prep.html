@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>GitHub Build Prep</title>
+<style>
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #14171c;
+  --muted: #5d6673;
+  --line: #dfe3e8;
+  --accent: #1b6ef3;
+  --accent-text: #ffffff;
+  --ok: #17803d;
+  --warn: #a15c00;
+  --bad: #b3261e;
+  --code: #eef0f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116;
+    --card: #171b22;
+    --text: #e8ebef;
+    --muted: #9aa4b2;
+    --line: #29303a;
+    --accent: #4d8dff;
+    --accent-text: #08111f;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --bad: #f87171;
+    --code: #0e1116;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 0 16px calc(32px + env(safe-area-inset-bottom));
+}
+main { max-width: 640px; margin: 0 auto; }
+header { padding: 28px 0 8px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; }
+p { margin: 0 0 10px; }
+.sub { color: var(--muted); margin: 0; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  margin-top: 16px;
+}
+.drop {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 108px; padding: 16px;
+  border: 2px dashed var(--line); border-radius: 12px;
+  cursor: pointer; color: var(--muted);
+  word-break: break-word;
+}
+.drop.over { border-color: var(--accent); color: var(--text); }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.drop strong { color: var(--text); }
+.btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 48px; padding: 10px 16px; margin-top: 10px;
+  border: 0; border-radius: 12px;
+  background: var(--accent); color: var(--accent-text);
+  font: inherit; font-weight: 600; text-decoration: none; cursor: pointer;
+}
+.btn.secondary { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; word-break: break-word; }
+.tag { display: inline-block; padding: 1px 9px; border-radius: 99px; font-size: 0.85rem; font-weight: 600; border: 1px solid var(--line); }
+.msg { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); font-size: 0.95rem; }
+.msg.warn { border-color: var(--warn); color: var(--warn); }
+.msg.bad { border-color: var(--bad); color: var(--bad); }
+.msg.ok { border-color: var(--ok); color: var(--ok); }
+.opt { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; }
+.opt input[type=checkbox] { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.opt small { display: block; color: var(--muted); }
+.field { margin: 10px 0; }
+.field label { display: block; margin-bottom: 4px; }
+select, input[type=text] {
+  width: 100%; min-height: 44px; padding: 8px 10px; font: inherit;
+  color: var(--text); background: var(--card);
+  border: 1px solid var(--line); border-radius: 10px;
+}
+ol, ul { margin: 6px 0 0; padding-left: 22px; }
+li { margin: 4px 0; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+code { background: var(--code); padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 10px; overflow: auto; max-height: 260px; margin: 8px 0 0; }
+details { margin-top: 12px; }
+summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+.busy { color: var(--muted); }
+footer { text-align: center; margin-top: 28px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>GitHub Build Prep</h1>
+    <p class="sub">Upload an Android project zip. Get it back, ready to be built on GitHub.</p>
+  </header>
+
+  <section class="card" id="s1">
+    <h2>1. Choose your zip</h2>
+    <label class="drop" id="drop" for="file">
+      <input type="file" id="file" accept=".zip,application/zip,application/x-zip-compressed">
+      <span id="dropText"><strong>Tap to choose a .zip</strong><br>(or drop it here)</span>
+    </label>
+    <p class="muted" style="margin-top:10px">Nothing is uploaded anywhere. The zip is processed inside this page, on your device.</p>
+    <div id="status" class="msg busy" hidden></div>
+    <div id="error" class="msg bad" hidden></div>
+  </section>
+
+  <section class="card" id="s2" hidden>
+    <h2>2. What I found</h2>
+    <dl id="found"></dl>
+    <div id="notes"></div>
+  </section>
+
+  <section class="card" id="s3" hidden>
+    <h2>3. Options</h2>
+    <div class="field">
+      <label for="java">Java version for the build</label>
+      <select id="java">
+        <option value="17">17 (most projects)</option>
+        <option value="11">11 (old projects)</option>
+        <option value="21">21 (very new projects)</option>
+      </select>
+    </div>
+    <div class="field" id="gradleField" hidden>
+      <label for="gradleVer">Gradle version <span class="muted">(used because the project has no Gradle wrapper)</span></label>
+      <input type="text" id="gradleVer" inputmode="decimal" autocomplete="off" value="8.9">
+    </div>
+    <label class="opt"><input type="checkbox" id="clean" checked><span>Clean up the zip<small>Removes old build output, IDE folders, <code>local.properties</code> and macOS junk.</small></span></label>
+    <label class="opt"><input type="checkbox" id="key" checked><span>Use a stable signing key<small>New builds can be installed over old ones. Without it every build has a different signature.</small></span></label>
+    <label class="opt"><input type="checkbox" id="release" checked><span>Publish the APK as a GitHub release<small>Gives you a direct download link on your phone.</small></span></label>
+    <button class="btn" id="go" type="button">Prepare for GitHub</button>
+  </section>
+
+  <section class="card" id="s4" hidden>
+    <h2>4. Done</h2>
+    <div id="changes"></div>
+    <a class="btn" id="dlZip" download>Download the project zip</a>
+    <a class="btn secondary" id="dlYml" download="build.yml">Download build.yml</a>
+    <h2 style="margin-top:20px">Now on GitHub</h2>
+    <ol>
+      <li>Open your repository, then <b>Add file → Upload files</b>, pick the zip you just downloaded and commit. Keep only one zip in the repository: the newest one is used.</li>
+      <li><b>Once per repository:</b> upload <code>build.yml</code> the same way, open it, tap the pencil and change the file name to <code>.github/workflows/build.yml</code>, then commit. Replace the old workflow if there is one.</li>
+      <li>Open the <b>Actions</b> tab. A green check means it worked (about 1 to 5 minutes).</li>
+      <li>Open <b>Releases</b> and tap the APK to download it.</li>
+      <li>Red cross? Open the run, copy the red lines and send them to Claude.</li>
+    </ol>
+    <details>
+      <summary>Show or copy the workflow text</summary>
+      <button class="btn secondary" id="copyYml" type="button">Copy workflow text</button>
+      <pre id="ymlText"></pre>
+    </details>
+    <p class="muted" style="margin-top:12px">The zip also contains the workflow at <code>.github/workflows/build.yml</code>, so it works as is when you push the extracted files from a computer.</p>
+  </section>
+
+  <footer class="muted">GitHub Build Prep v1</footer>
+</main>
+
+<script type="text/plain" id="wfTpl">name: Build APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "@@JAVA@@"
+
+      - name: Find the project
+        id: find
+        run: |
+          shallowest() { awk -F/ '{print NF, $0}' | sort -n | head -n1 | cut -d' ' -f2-; }
+          BASE=.
+          NEWEST=""; NEWEST_T=-1
+          for z in ./*.zip; do
+            [ -f "$z" ] || continue
+            t=$(git log -1 --format=%ct -- "$z" 2>/dev/null || echo 0)
+            if [ "${t:-0}" -ge "$NEWEST_T" ]; then NEWEST="$z"; NEWEST_T="${t:-0}"; fi
+          done
+          if [ -n "$NEWEST" ]; then
+            echo "Using $NEWEST"
+            rm -rf _project
+            mkdir _project
+            unzip -q -o "$NEWEST" -d _project
+            BASE=_project
+          fi
+          rm -rf "$BASE/__MACOSX"
+          GS=$(find "$BASE" -maxdepth 5 \( -name settings.gradle -o -name settings.gradle.kts \) | shallowest)
+          PS=$(find "$BASE" -maxdepth 5 -name build-plain.sh | shallowest)
+          if [ -n "$GS" ]; then
+            DIR=$(dirname "$GS")
+            echo "type=gradle" >> "$GITHUB_OUTPUT"
+            echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+            if [ -f "$DIR/gradlew" ] && [ -f "$DIR/gradle/wrapper/gradle-wrapper.jar" ]; then
+              echo "wrapper=yes" >> "$GITHUB_OUTPUT"
+            else
+              echo "wrapper=no" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ -n "$PS" ]; then
+            echo "type=plain" >> "$GITHUB_OUTPUT"
+            echo "dir=$(dirname "$PS")" >> "$GITHUB_OUTPUT"
+            echo "wrapper=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::No Android project found. Upload the project zip prepared by GitHub Build Prep to this repository."
+            exit 1
+          fi
+
+      - name: Accept Android SDK licenses
+        run: |
+          SM="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SM" ]; then yes | "$SM" --licenses > /dev/null || true; fi
+
+      - name: Set up Gradle (the project has no usable wrapper)
+        if: steps.find.outputs.type == 'gradle' && steps.find.outputs.wrapper == 'no'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "@@GRADLE@@"
+
+      - name: Use the stable signing key
+        run: |
+          K=$(find "${{ steps.find.outputs.dir }}" -maxdepth 3 -path '*/.github/debug.keystore' | head -n1)
+          if [ -n "$K" ]; then
+            mkdir -p ~/.android
+            cp "$K" ~/.android/debug.keystore
+            echo "Using the key from the project"
+          fi
+
+      - name: Build
+        working-directory: ${{ steps.find.outputs.dir }}
+        run: |
+          if [ "${{ steps.find.outputs.type }}" = "gradle" ]; then
+            if [ "${{ steps.find.outputs.wrapper }}" = "yes" ]; then
+              chmod +x gradlew
+              ./gradlew --no-daemon assembleDebug --stacktrace
+            else
+              gradle --no-daemon assembleDebug --stacktrace
+            fi
+          else
+            chmod +x build-plain.sh
+            ./build-plain.sh
+          fi
+
+      - name: Collect the APKs
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          D="${{ steps.find.outputs.dir }}"
+          if [ "${{ steps.find.outputs.type }}" = "gradle" ]; then
+            find "$D" -path '*/build/outputs/apk/debug/*.apk' -exec cp {} "$GITHUB_WORKSPACE/out/" \;
+          else
+            cp "$D"/out/*.apk "$GITHUB_WORKSPACE/out/"
+          fi
+          ls -l "$GITHUB_WORKSPACE/out"
+          test -n "$(ls "$GITHUB_WORKSPACE"/out/*.apk 2>/dev/null)"
+
+      - name: Keep the APKs as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: out/*.apk
+
+      # @@RELEASE_START@@
+      - name: Publish the APKs as a release (easy download on a phone)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "build-${{ github.run_number }}" out/*.apk \
+            --title "Build ${{ github.run_number }}" \
+            --notes "Built from commit ${GITHUB_SHA::7}" \
+            || gh release upload "build-${{ github.run_number }}" out/*.apk --clobber
+      # @@RELEASE_END@@
+</script>
+<script type="text/plain" id="plainSh">#!/bin/bash
+# Plain Android build without Gradle: aapt2 + javac + d8 + apksigner.
+# Handles simple Java apps (no Kotlin, no external libraries).
+# Added by GitHub Build Prep. Result: out/<package>.apk
+set -e
+cd "$(dirname "$0")"
+ROOT="$(pwd)"
+
+# ---- find the project parts ---------------------------------------------------
+MANIFEST="$(find . -name AndroidManifest.xml -not -path '*/build/*' -not -path './out/*' | awk -F/ '{print NF, $0}' | sort -n | head -n1 | cut -d' ' -f2-)"
+[ -n "$MANIFEST" ] || { echo "ERROR: no AndroidManifest.xml found"; exit 1; }
+SRC_MAIN="$(dirname "$MANIFEST")"
+PKG="$(sed -n 's/.*package="\([^"]*\)".*/\1/p' "$MANIFEST" | head -n1)"
+[ -n "$PKG" ] || { echo "ERROR: AndroidManifest.xml has no package attribute (it is needed without Gradle)"; exit 1; }
+MIN_SDK="$(sed -n 's/.*minSdkVersion="\([0-9]*\)".*/\1/p' "$MANIFEST" | head -n1)"
+MIN_SDK="${MIN_SDK:-21}"
+TARGET_SDK="$(sed -n 's/.*targetSdkVersion="\([0-9]*\)".*/\1/p' "$MANIFEST" | head -n1)"
+TARGET_SDK="${TARGET_SDK:-34}"
+
+if [ -n "$(find . -name '*.kt' -not -path '*/build/*' | head -n1)" ]; then
+  echo "ERROR: Kotlin files found. This plain builder only handles Java. Use a Gradle project."
+  exit 1
+fi
+SOURCES="$(find . -name '*.java' -not -path '*/build/*' -not -path './out/*')"
+[ -n "$SOURCES" ] || { echo "ERROR: no .java files found"; exit 1; }
+
+# ---- Android SDK ------------------------------------------------------------------
+SDK=""
+for c in "$ANDROID_HOME" "$ANDROID_SDK_ROOT" "$HOME/Library/Android/sdk" "$HOME/Android/Sdk" \
+         "/usr/local/lib/android/sdk" "/opt/homebrew/share/android-commandlinetools" \
+         "/usr/local/share/android-commandlinetools"; do
+  if [ -n "$c" ] && [ -d "$c" ]; then SDK="$c"; break; fi
+done
+[ -n "$SDK" ] || { echo "ERROR: Android SDK not found. Set ANDROID_HOME."; exit 1; }
+echo "SDK: $SDK"
+
+find_platform() {
+  best=""
+  for d in "$SDK"/platforms/android-*; do
+    [ -f "$d/android.jar" ] || continue
+    n="${d##*/android-}"
+    case "$n" in *[!0-9]*) continue ;; esac
+    if [ "$n" -ge "$MIN_SDK" ]; then
+      if [ -z "$best" ] || [ "$n" -gt "${best##*/android-}" ]; then best="$d"; fi
+    fi
+  done
+  echo "$best"
+}
+find_buildtools() {
+  best=""
+  for d in "$SDK"/build-tools/*; do
+    [ -x "$d/aapt2" ] && best="$d"
+  done
+  echo "$best"
+}
+
+PLATFORM="$(find_platform)"
+BT="$(find_buildtools)"
+if [ -z "$PLATFORM" ] || [ -z "$BT" ]; then
+  SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+  if [ -x "$SDKMANAGER" ]; then
+    yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+    "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0"
+    PLATFORM="$(find_platform)"
+    BT="$(find_buildtools)"
+  fi
+fi
+[ -n "$PLATFORM" ] || { echo "ERROR: no Android platform >= $MIN_SDK in the SDK"; exit 1; }
+[ -n "$BT" ] || { echo "ERROR: no build-tools in the SDK"; exit 1; }
+echo "Platform: $PLATFORM"
+echo "Build tools: $BT"
+
+ANDROID_JAR="$PLATFORM/android.jar"
+PLAT_NUM="${PLATFORM##*/android-}"
+if [ "$PLAT_NUM" -lt "$TARGET_SDK" ]; then TARGET_SDK="$PLAT_NUM"; fi
+if [ "$MIN_SDK" -gt "$TARGET_SDK" ]; then MIN_SDK="$TARGET_SDK"; fi
+AAPT2="$BT/aapt2"
+D8="$BT/d8"
+ZIPALIGN="$BT/zipalign"
+APKSIGNER="$BT/apksigner"
+
+# ---- build ----------------------------------------------------------------------------
+rm -rf build out
+mkdir -p build/gen build/classes build/dex out
+RES="$SRC_MAIN/res"
+ASSETS="$SRC_MAIN/assets"
+
+echo "[1/6] Compiling resources"
+if [ -d "$RES" ]; then
+  "$AAPT2" compile --dir "$RES" -o build/res.zip
+fi
+
+echo "[2/6] Linking resources + manifest"
+LINK=("$AAPT2" link -o build/base.apk -I "$ANDROID_JAR" --manifest "$MANIFEST" --java build/gen
+      --min-sdk-version "$MIN_SDK" --target-sdk-version "$TARGET_SDK")
+if [ -d "$ASSETS" ]; then LINK+=(-A "$ASSETS"); fi
+if ! grep -q "versionCode" "$MANIFEST"; then LINK+=(--version-code 1 --version-name 1.0); fi
+if [ -f build/res.zip ]; then LINK+=(build/res.zip); fi
+"${LINK[@]}"
+
+echo "[3/6] Compiling Java"
+GENERATED="$(find build/gen -name '*.java')"
+# shellcheck disable=SC2086
+javac -Xlint:-options --release 11 -classpath "$ANDROID_JAR" -d build/classes $SOURCES $GENERATED
+
+echo "[4/6] Converting to DEX"
+CLASSES="$(find build/classes -name '*.class')"
+# shellcheck disable=SC2086
+"$D8" --lib "$ANDROID_JAR" --min-api "$MIN_SDK" --output build/dex $CLASSES
+
+echo "[5/6] Packaging"
+(cd build/dex && zip -q -j "$ROOT/build/base.apk" classes.dex)
+"$ZIPALIGN" -f -p 4 build/base.apk build/aligned.apk
+
+echo "[6/6] Signing"
+KS=""
+if [ -f .github/debug.keystore ]; then
+  KS=".github/debug.keystore"
+else
+  FOUND="$(find . -name debug.keystore -not -path './build/*' | head -n1)"
+  if [ -n "$FOUND" ]; then KS="$FOUND"; fi
+fi
+if [ -z "$KS" ]; then
+  KS="build/debug.keystore"
+  keytool -genkeypair -keystore "$KS" -alias androiddebugkey -keyalg RSA -keysize 2048 \
+    -validity 10000 -storepass android -keypass android \
+    -dname "CN=Android Debug,O=Android,C=US" >/dev/null 2>&1
+fi
+"$APKSIGNER" sign --ks "$KS" --ks-key-alias androiddebugkey --ks-pass pass:android \
+  --key-pass pass:android --out "out/$PKG.apk" build/aligned.apk
+"$APKSIGNER" verify "out/$PKG.apk"
+
+echo ""
+echo "Done: $ROOT/out/$PKG.apk"
+</script>
+<script>
+(function () {
+'use strict';
+
+var KEY_B64 = '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';
+var $ = function (id) { return document.getElementById(id); };
+var WF_TPL = $('wfTpl').textContent.replace(/^\s*\n/, '');
+var PLAIN_SH = $('plainSh').textContent.replace(/^\s*\n/, '');
+
+// ======================= minimal zip reader / writer =======================
+// Reads the central directory, copies untouched entries byte for byte (no recompression),
+// and only builds new entries for files that are added or changed.
+
+var CRC_TABLE = (function () {
+  var t = new Uint32Array(256);
+  for (var n = 0; n < 256; n++) {
+    var c = n;
+    for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(u8) {
+  var c = 0xFFFFFFFF;
+  for (var i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function readZip(buf) {
+  var u8 = new Uint8Array(buf);
+  var dv = new DataView(buf);
+  var eocd = -1;
+  for (var i = u8.length - 22; i >= Math.max(0, u8.length - 22 - 65535); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('This is not a valid zip file.');
+  var total = dv.getUint16(eocd + 10, true);
+  var cdOff = dv.getUint32(eocd + 16, true);
+  if (total === 0xFFFF || cdOff === 0xFFFFFFFF) throw new Error('Zip64 archives are not supported.');
+  var dec = new TextDecoder('utf-8');
+  var p = cdOff;
+  var entries = [];
+  for (var n = 0; n < total; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('The zip is damaged (bad directory).');
+    var e = {
+      versionMadeBy: dv.getUint16(p + 4, true),
+      flags: dv.getUint16(p + 8, true),
+      method: dv.getUint16(p + 10, true),
+      time: dv.getUint16(p + 12, true),
+      date: dv.getUint16(p + 14, true),
+      crc: dv.getUint32(p + 16, true),
+      csize: dv.getUint32(p + 20, true),
+      size: dv.getUint32(p + 24, true),
+      extAttr: dv.getUint32(p + 38, true),
+      offset: dv.getUint32(p + 42, true),
+      buf: u8
+    };
+    var nl = dv.getUint16(p + 28, true);
+    var el = dv.getUint16(p + 30, true);
+    var cl = dv.getUint16(p + 32, true);
+    e.name = dec.decode(u8.subarray(p + 46, p + 46 + nl));
+    if (e.csize === 0xFFFFFFFF || e.size === 0xFFFFFFFF || e.offset === 0xFFFFFFFF) throw new Error('Zip64 entries are not supported.');
+    if (e.flags & 1) throw new Error('Password protected zips are not supported.');
+    entries.push(e);
+    p += 46 + nl + el + cl;
+  }
+  return entries;
+}
+
+function rawOf(e) {
+  if (e.data) return e.data;
+  var dv = new DataView(e.buf.buffer, e.buf.byteOffset, e.buf.byteLength);
+  var o = e.offset;
+  if (dv.getUint32(o, true) !== 0x04034b50) throw new Error('The zip is damaged (bad entry ' + e.name + ').');
+  var s = o + 30 + dv.getUint16(o + 26, true) + dv.getUint16(o + 28, true);
+  return e.buf.subarray(s, s + e.csize);
+}
+
+async function inflateRaw(u8) {
+  var stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function bytesOf(e) {
+  if (e.data) return e.data;
+  var raw = rawOf(e);
+  if (e.method === 0) return raw;
+  if (e.method === 8) return inflateRaw(raw);
+  throw new Error('Unsupported compression in ' + e.name);
+}
+
+async function textOf(e) {
+  return new TextDecoder('utf-8').decode(await bytesOf(e));
+}
+
+function dosNow() {
+  var d = new Date();
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()
+  };
+}
+
+var MODE_FILE = 33188; // 0100644
+var MODE_EXEC = 33261; // 0100755
+
+function newEntry(name, u8, mode) {
+  var t = dosNow();
+  return {
+    name: name, flags: 0x0800, method: 0, versionMadeBy: (3 << 8) | 20,
+    time: t.time, date: t.date, crc: crc32(u8), csize: u8.length, size: u8.length,
+    extAttr: ((mode << 16) >>> 0), data: u8
+  };
+}
+
+function putFile(entries, name, u8, mode) {
+  var ne = newEntry(name, u8, mode);
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].name === name) { entries[i] = ne; return; }
+  }
+  entries.push(ne);
+}
+
+function chmodEntry(entries, name, mode) {
+  for (var i = 0; i < entries.length; i++) {
+    if (entries[i].name === name) {
+      entries[i].versionMadeBy = (3 << 8) | (entries[i].versionMadeBy & 0xFF);
+      entries[i].extAttr = (((mode << 16) | (entries[i].extAttr & 0xFFFF)) >>> 0);
+      return true;
+    }
+  }
+  return false;
+}
+
+function writeZip(entries) {
+  if (entries.length > 0xFFFF) throw new Error('Too many files for this tool (more than 65535).');
+  var enc = new TextEncoder();
+  var parts = [];
+  var offset = 0;
+  var cds = [];
+  entries.forEach(function (e) {
+    var nameB = enc.encode(e.name);
+    var raw = rawOf(e);
+    var flags = ((e.flags & ~0x0008) | 0x0800) & 0xFFFF;
+    var lh = new Uint8Array(30 + nameB.length);
+    var dv = new DataView(lh.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, flags, true);
+    dv.setUint16(8, e.method, true);
+    dv.setUint16(10, e.time, true);
+    dv.setUint16(12, e.date, true);
+    dv.setUint32(14, e.crc, true);
+    dv.setUint32(18, e.csize, true);
+    dv.setUint32(22, e.size, true);
+    dv.setUint16(26, nameB.length, true);
+    dv.setUint16(28, 0, true);
+    lh.set(nameB, 30);
+    parts.push(lh, raw);
+    cds.push({ e: e, nameB: nameB, flags: flags, offset: offset });
+    offset += lh.length + raw.length;
+  });
+  var cdStart = offset;
+  cds.forEach(function (c) {
+    var cd = new Uint8Array(46 + c.nameB.length);
+    var dv = new DataView(cd.buffer);
+    dv.setUint32(0, 0x02014b50, true);
+    dv.setUint16(4, c.e.versionMadeBy, true);
+    dv.setUint16(6, 20, true);
+    dv.setUint16(8, c.flags, true);
+    dv.setUint16(10, c.e.method, true);
+    dv.setUint16(12, c.e.time, true);
+    dv.setUint16(14, c.e.date, true);
+    dv.setUint32(16, c.e.crc, true);
+    dv.setUint32(20, c.e.csize, true);
+    dv.setUint32(24, c.e.size, true);
+    dv.setUint16(28, c.nameB.length, true);
+    dv.setUint32(38, c.e.extAttr, true);
+    dv.setUint32(42, c.offset, true);
+    cd.set(c.nameB, 46);
+    parts.push(cd);
+    offset += cd.length;
+  });
+  var cdSize = offset - cdStart;
+  if (offset > 0xFFFFFFFF) throw new Error('The result is bigger than 4 GB, which this tool cannot write.');
+  var end = new Uint8Array(22);
+  var ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, entries.length, true);
+  ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, cdStart, true);
+  parts.push(end);
+  return new Blob(parts, { type: 'application/zip' });
+}
+
+// ============================ project analysis ============================
+
+var JUNK_RE = /(^|\/)(__MACOSX|\.DS_Store|Thumbs\.db)(\/|$)/;
+var GEN_RE = /(^|\/)(build\/(outputs|intermediates|generated|tmp|kotlin|reports|classes)|\.gradle|\.idea|node_modules)\//;
+
+function dirOf(n) { var i = n.lastIndexOf('/'); return i < 0 ? '' : n.slice(0, i + 1); }
+function depth(n) { return n.split('/').length; }
+function enc(s) { return new TextEncoder().encode(s); }
+function b64ToBytes(b64) {
+  var bin = atob(b64);
+  var u8 = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; });
+}
+
+async function analyze(entries) {
+  var files = entries.filter(function (e) { return !e.name.endsWith('/') && !JUNK_RE.test(e.name); });
+  if (!files.length) throw new Error('The zip is empty.');
+  var byName = new Map(files.map(function (e) { return [e.name, e]; }));
+  var names = files.map(function (e) { return e.name; });
+  var firstSegs = new Set(names.map(function (n) { return n.split('/')[0]; }));
+  var rootFiles = names.some(function (n) { return n.indexOf('/') < 0; });
+  var prefix = (!rootFiles && firstSegs.size === 1) ? Array.from(firstSegs)[0] + '/' : '';
+
+  function shallow(re) {
+    return names.filter(function (n) { return re.test(n) && !GEN_RE.test(n); })
+      .sort(function (a, b) { return depth(a) - depth(b) || a.localeCompare(b); })[0];
+  }
+  async function text(n) { return byName.has(n) ? textOf(byName.get(n)) : ''; }
+
+  var info = { names: names, byName: byName, prefix: prefix, type: 'none', root: prefix };
+
+  var manifests = names.filter(function (n) {
+    return /(^|\/)AndroidManifest\.xml$/.test(n) && !GEN_RE.test(n) && !/(^|\/)build\//.test(n);
+  }).sort(function (a, b) { return depth(a) - depth(b) || a.localeCompare(b); });
+  info.manifests = manifests;
+  info.packages = [];
+  for (var i = 0; i < Math.min(4, manifests.length); i++) {
+    var m = (await text(manifests[i])).match(/package\s*=\s*"([^"]+)"/);
+    if (m && info.packages.indexOf(m[1]) < 0) info.packages.push(m[1]);
+  }
+  info.kotlin = names.filter(function (n) { return /\.kt$/.test(n) && !GEN_RE.test(n); }).length;
+  info.java = names.filter(function (n) { return /\.java$/.test(n) && !GEN_RE.test(n); }).length;
+
+  var settings = shallow(/(^|\/)settings\.gradle(\.kts)?$/);
+  var gradleRoot = null;
+  if (settings) {
+    gradleRoot = dirOf(settings);
+  } else {
+    var rb = shallow(/(^|\/)build\.gradle(\.kts)?$/);
+    if (rb && /com\.android\./.test(await text(rb))) gradleRoot = dirOf(rb);
+  }
+
+  if (gradleRoot !== null) {
+    info.type = 'gradle';
+    info.root = gradleRoot;
+    info.gradlewPath = gradleRoot + 'gradlew';
+    info.hasGradlew = byName.has(info.gradlewPath);
+    info.hasWrapperJar = byName.has(gradleRoot + 'gradle/wrapper/gradle-wrapper.jar');
+    var pt = await text(gradleRoot + 'gradle/wrapper/gradle-wrapper.properties');
+    var gm = pt.match(/gradle-(\d+(?:\.\d+)*)-(?:bin|all)\.zip/);
+    info.wrapperGradle = gm ? gm[1] : '';
+    var gfiles = names.filter(function (n) {
+      return n.indexOf(gradleRoot) === 0 && /(^|\/)(build\.gradle(\.kts)?|libs\.versions\.toml)$/.test(n) && !GEN_RE.test(n);
+    }).slice(0, 60);
+    var all = '';
+    info.apps = 0; info.libs = 0; info.moduleDirs = [];
+    for (var j = 0; j < gfiles.length; j++) {
+      var t = await text(gfiles[j]);
+      all += '\n' + t;
+      if (/build\.gradle(\.kts)?$/.test(gfiles[j])) {
+        info.moduleDirs.push(dirOf(gfiles[j]));
+        if (/com\.android\.application|androidApplication/.test(t)) info.apps++;
+        else if (/com\.android\.library|androidLibrary/.test(t)) info.libs++;
+      }
+    }
+    info.usesAndroidx = /androidx\./.test(all);
+    var a = all.match(/com\.android\.tools\.build:gradle:(\d+)\.(\d+)/) ||
+            all.match(/com\.android\.(?:application|library)['"]\)?\s*version\s*\(?['"](\d+)\.(\d+)/) ||
+            all.match(/^\s*agp\s*=\s*"(\d+)\.(\d+)/m);
+    info.agp = a ? a[1] + '.' + a[2] : '';
+    var major = a ? parseInt(a[1], 10) : 0;
+    info.javaDefault = (major && major < 7) ? '11' : '17';
+    info.gradleDefault = info.wrapperGradle || (major === 7 ? '7.6.4' : '8.9');
+  } else if (manifests.length) {
+    info.type = 'plain';
+    info.root = prefix;
+  }
+  info.localProps = names.filter(function (n) { return /(^|\/)local\.properties$/.test(n); });
+  info.workflows = names.filter(function (n) { return /(^|\/)\.github\/workflows\/.+\.ya?ml$/.test(n); });
+  return info;
+}
+
+// ============================== UI ==============================
+
+var buffer = null;
+var origName = 'project.zip';
+var info = null;
+var objectUrls = [];
+
+function show(id, on) { $(id).hidden = !on; }
+function setStatus(msg) { var s = $('status'); s.textContent = msg || ''; s.hidden = !msg; }
+function setError(msg) { var s = $('error'); s.textContent = msg || ''; s.hidden = !msg; }
+
+function resetUI() {
+  setStatus(''); setError('');
+  show('s2', false); show('s3', false); show('s4', false);
+  objectUrls.forEach(function (u) { URL.revokeObjectURL(u); });
+  objectUrls = [];
+}
+
+function row(k, v) { return '<dt>' + esc(k) + '</dt><dd>' + v + '</dd>'; }
+
+function renderFound(i) {
+  var rows = '';
+  var label = { gradle: 'Gradle project', plain: 'Plain project (no Gradle)', none: 'Not recognised' }[i.type];
+  var cls = i.type === 'none' ? 'bad' : 'ok';
+  rows += row('Type', '<span class="tag" style="color:var(--' + cls + ')">' + label + '</span>');
+  rows += row('Files', String(i.names.length) + (i.prefix ? ' (inside folder <code>' + esc(i.prefix) + '</code>)' : ''));
+  if (i.type === 'gradle') {
+    rows += row('Modules', i.apps + ' app, ' + i.libs + ' library');
+    rows += row('Gradle wrapper', i.hasGradlew && i.hasWrapperJar ? 'present' : 'missing, will use Gradle ' + esc(i.gradleDefault));
+    if (i.agp) rows += row('Android plugin', esc(i.agp));
+  }
+  if (i.packages.length) rows += row('Package', esc(i.packages.join(', ')));
+  if (i.kotlin || i.java) rows += row('Source', i.java + ' Java, ' + i.kotlin + ' Kotlin');
+  $('found').innerHTML = rows;
+
+  var notes = '';
+  function msg(cls, t) { notes += '<div class="msg ' + cls + '">' + t + '</div>'; }
+  if (i.type === 'none') {
+    msg('bad', 'No Android project found: no <code>settings.gradle</code> and no <code>AndroidManifest.xml</code>. Is this the right zip?');
+  }
+  if (i.type === 'plain' && i.kotlin) {
+    msg('warn', 'This project has Kotlin files. Without Gradle they cannot be compiled. The build will fail; a Gradle project is needed.');
+  }
+  if (i.type === 'plain' && !i.java) {
+    msg('warn', 'No Java files found. The build will fail.');
+  }
+  if (i.type === 'plain' && !i.packages.length) {
+    msg('warn', 'The manifest has no <code>package</code> attribute, which is needed without Gradle.');
+  }
+  if (i.localProps.length) {
+    msg('warn', '<code>local.properties</code> points to the SDK on your own computer. It breaks builds elsewhere and will be removed (when cleaning is on).');
+  }
+  if (i.workflows.length) {
+    msg('warn', 'The zip already contains workflow files (' + esc(i.workflows.join(', ')) + '). They keep running next to the new one.');
+  }
+  if (i.type !== 'none') {
+    msg('ok', i.type === 'gradle' ? 'Will build with <code>assembleDebug</code>.' : 'Will build with the generic <code>build-plain.sh</code> that gets added to the zip.');
+  }
+  $('notes').innerHTML = notes;
+
+  show('s2', true);
+  show('s3', i.type !== 'none');
+  if (i.type === 'gradle') {
+    $('java').value = i.javaDefault;
+    $('gradleVer').value = i.gradleDefault;
+  }
+  $('gradleField').hidden = !(i.type === 'gradle' && !(i.hasGradlew && i.hasWrapperJar));
+}
+
+async function load(file) {
+  resetUI();
+  origName = file.name || 'project.zip';
+  $('dropText').innerHTML = '<strong>' + esc(origName) + '</strong><br>' + Math.round(file.size / 1024) + ' KB. Tap to choose another.';
+  try {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('This browser is too old for this tool. Use a current Chrome, Firefox or Safari.');
+    }
+    setStatus('Reading the zip...');
+    buffer = await file.arrayBuffer();
+    var entries = readZip(buffer);
+    info = await analyze(entries);
+    setStatus('');
+    renderFound(info);
+  } catch (err) {
+    setStatus('');
+    setError(err && err.message ? err.message : String(err));
+  }
+}
+
+function makeWorkflow(o) {
+  var t = WF_TPL.replace(/@@JAVA@@/g, o.java).replace(/@@GRADLE@@/g, o.gradle);
+  if (!o.release) t = t.replace(/ *# @@RELEASE_START@@[\s\S]*?# @@RELEASE_END@@\n?/, '');
+  else t = t.replace(/ *# @@RELEASE_(START|END)@@\n/g, '');
+  return t;
+}
+
+async function prepare() {
+  setError('');
+  var go = $('go');
+  go.disabled = true;
+  try {
+    var java = $('java').value;
+    if (['11', '17', '21'].indexOf(java) < 0) java = '17';
+    var gradle = $('gradleVer').value.trim();
+    if (!/^\d+(\.\d+){0,2}$/.test(gradle)) gradle = (info && info.gradleDefault) || '8.9';
+    var o = { java: java, gradle: gradle, clean: $('clean').checked, key: $('key').checked, release: $('release').checked };
+
+    var entries = readZip(buffer);
+    var changes = [];
+
+    if (o.clean) {
+      var dirs = info.type === 'gradle' ? info.moduleDirs.concat([info.root]) : [info.root];
+      var removed = {};
+      var keep = [];
+      entries.forEach(function (e) {
+        var n = e.name, why = null;
+        if (JUNK_RE.test(n)) why = 'macOS and Windows junk files';
+        else if (/(^|\/)local\.properties$/.test(n)) why = 'local.properties';
+        else if (/(^|\/)(\.idea|\.gradle|\.cxx|\.externalNativeBuild)\//.test(n)) why = 'IDE and cache folders';
+        else {
+          for (var i = 0; i < dirs.length; i++) {
+            if (n.indexOf(dirs[i] + 'build/') === 0) { why = 'old build output'; break; }
+          }
+        }
+        if (why) { removed[why] = (removed[why] || 0) + 1; } else { keep.push(e); }
+      });
+      entries = keep;
+      Object.keys(removed).forEach(function (k) { changes.push('Removed ' + removed[k] + ' file(s): ' + k); });
+    }
+
+    if (info.type === 'gradle') {
+      var gp = info.root + 'gradle.properties';
+      var existing = entries.filter(function (e) { return e.name === gp; })[0];
+      var txt = existing ? await textOf(existing) : '';
+      var add = [];
+      if (!/^\s*org\.gradle\.jvmargs\s*=/m.test(txt)) add.push('org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8');
+      if (info.usesAndroidx && !/^\s*android\.useAndroidX\s*=/m.test(txt)) add.push('android.useAndroidX=true');
+      if (add.length) {
+        var nt = (txt && !/\n$/.test(txt) ? txt + '\n' : txt) + add.join('\n') + '\n';
+        putFile(entries, gp, enc(nt), MODE_FILE);
+        changes.push('gradle.properties: added ' + add.join(' and '));
+      }
+      if (info.hasGradlew && chmodEntry(entries, info.gradlewPath, MODE_EXEC)) changes.push('gradlew made executable');
+    } else if (info.type === 'plain') {
+      putFile(entries, info.root + 'build-plain.sh', enc(PLAIN_SH), MODE_EXEC);
+      changes.push('Added build-plain.sh (Java apps without Gradle)');
+    }
+
+    if (o.key) {
+      putFile(entries, info.root + '.github/debug.keystore', b64ToBytes(KEY_B64), MODE_FILE);
+      changes.push('Added a stable signing key (.github/debug.keystore)');
+    }
+
+    var wf = makeWorkflow(o);
+    putFile(entries, '.github/workflows/build.yml', enc(wf), MODE_FILE);
+    changes.push('Added the GitHub workflow (Java ' + o.java + (info.type === 'gradle' && !(info.hasGradlew && info.hasWrapperJar) ? ', Gradle ' + o.gradle : '') + (o.release ? ', publishes a release' : '') + ')');
+
+    var blob = writeZip(entries);
+    var outName = origName.replace(/\.zip$/i, '') + '-github.zip';
+    var zipUrl = URL.createObjectURL(blob);
+    var ymlUrl = URL.createObjectURL(new Blob([wf], { type: 'text/plain' }));
+    objectUrls.push(zipUrl, ymlUrl);
+
+    $('dlZip').href = zipUrl;
+    $('dlZip').setAttribute('download', outName);
+    $('dlZip').textContent = 'Download ' + outName;
+    $('dlYml').href = ymlUrl;
+    $('ymlText').textContent = wf;
+    $('changes').innerHTML = '<div class="msg ok"><b>' + esc(outName) + '</b> is ready (' + Math.round(blob.size / 1024) + ' KB):<ul>' +
+      changes.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ul></div>';
+    show('s4', true);
+    $('s4').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    setError('Something went wrong: ' + (err && err.message ? err.message : String(err)));
+  } finally {
+    go.disabled = false;
+  }
+}
+
+$('file').addEventListener('change', function (e) {
+  var f = e.target.files && e.target.files[0];
+  if (f) load(f);
+});
+var drop = $('drop');
+['dragenter', 'dragover'].forEach(function (ev) {
+  drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+});
+['dragleave', 'drop'].forEach(function (ev) {
+  drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+});
+drop.addEventListener('drop', function (e) {
+  var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) load(f);
+});
+$('go').addEventListener('click', prepare);
+$('copyYml').addEventListener('click', async function () {
+  var btn = $('copyYml');
+  try {
+    await navigator.clipboard.writeText($('ymlText').textContent);
+    btn.textContent = 'Copied';
+  } catch (err) {
+    var r = document.createRange();
+    r.selectNodeContents($('ymlText'));
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    btn.textContent = 'Selected, now tap Copy in your browser';
+  }
+  setTimeout(function () { btn.textContent = 'Copy workflow text'; }, 2500);
+});
+
+// exposed for automated tests
+window.__prep = { readZip: readZip, writeZip: writeZip, crc32: crc32 };
+})();
+</script>
+</body>
+</html>
