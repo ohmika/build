@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark light">
-<title>GitHub Build Prep</title>
+<title>GitHub Build Prep V3</title>
 <style>
 :root {
   --bg: #f5f6f8;
@@ -110,7 +110,7 @@ footer { text-align: center; margin-top: 28px; }
 <main>
   <header>
     <h1>GitHub Build Prep</h1>
-    <p class="sub">Upload an Android project zip. Get it back, ready to be built on GitHub.</p>
+    <p class="sub">Prepare Android and Wear OS projects for reliable GitHub Actions builds — processed locally in your browser.</p>
   </header>
 
   <section class="card" id="s1">
@@ -145,7 +145,7 @@ footer { text-align: center; margin-top: 28px; }
       <input type="text" id="gradleVer" inputmode="decimal" autocomplete="off" value="8.9">
     </div>
     <label class="opt"><input type="checkbox" id="clean" checked><span>Clean up the zip<small>Removes old build output, IDE folders, <code>local.properties</code> and macOS junk.</small></span></label>
-    <label class="opt"><input type="checkbox" id="key" checked><span>Use a stable signing key<small>New builds can be installed over old ones. Without it every build has a different signature.</small></span></label>
+    <label class="opt"><input type="checkbox" id="key"><span>Use a private, stable signing key from GitHub Secrets<small>Optional. Add ANDROID_DEBUG_KEYSTORE_BASE64 as a repository secret. No keystore is embedded in this page or ZIP.</small></span></label>
     <label class="opt"><input type="checkbox" id="release" checked><span>Publish the APK as a GitHub release<small>Gives you a direct download link on your phone.</small></span></label>
     <button class="btn" id="go" type="button">Prepare for GitHub</button>
   </section>
@@ -159,7 +159,8 @@ footer { text-align: center; margin-top: 28px; }
     <ol>
       <li>Open your repository, then <b>Add file → Upload files</b>, pick the zip you just downloaded and commit. Keep only one zip in the repository: the newest one is used.</li>
       <li><b>Once per repository:</b> upload <code>build.yml</code> the same way, open it, tap the pencil and change the file name to <code>.github/workflows/build.yml</code>, then commit. Replace the old workflow if there is one.</li>
-      <li>Open the <b>Actions</b> tab. A green check means it worked (about 1 to 5 minutes).</li>
+      <li>For a stable signing identity, create the repository secret <code>ANDROID_DEBUG_KEYSTORE_BASE64</code> containing the Base64-encoded contents of your own debug keystore. Keep the keystore private and back it up.</li>
+      <li>Open the <b>Actions</b> tab. A green check means it worked (build time varies by project).</li>
       <li>Open <b>Releases</b> and tap the APK to download it.</li>
       <li>Red cross? Open the run, copy the red lines and send them to Claude.</li>
     </ol>
@@ -171,7 +172,7 @@ footer { text-align: center; margin-top: 28px; }
     <p class="muted" style="margin-top:12px">The zip also contains the workflow at <code>.github/workflows/build.yml</code>, so it works as is when you push the extracted files from a computer.</p>
   </section>
 
-  <footer class="muted">GitHub Build Prep v1</footer>
+  <footer class="muted">GitHub Build Prep V3 · development</footer>
 </main>
 
 <script type="text/plain" id="wfTpl">name: Build APK
@@ -246,13 +247,18 @@ jobs:
         with:
           gradle-version: "@@GRADLE@@"
 
-      - name: Use the stable signing key
+      - name: Configure private debug signing key (optional)
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
         run: |
-          K=$(find "${{ steps.find.outputs.dir }}" -maxdepth 3 -path '*/.github/debug.keystore' | head -n1)
-          if [ -n "$K" ]; then
-            mkdir -p ~/.android
-            cp "$K" ~/.android/debug.keystore
-            echo "Using the key from the project"
+          set -eu
+          if [ -n "${ANDROID_DEBUG_KEYSTORE_BASE64:-}" ]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+            echo "Private stable debug signing key configured"
+          else
+            echo "No custom signing secret; using the temporary runner debug key"
           fi
 
       - name: Build
@@ -270,17 +276,30 @@ jobs:
             ./build-plain.sh
           fi
 
-      - name: Collect the APKs
+      - name: Collect all APKs
+        shell: bash
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/out"
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/out"
           D="${{ steps.find.outputs.dir }}"
+          mkdir -p "$OUT"
           if [ "${{ steps.find.outputs.type }}" = "gradle" ]; then
-            find "$D" -path '*/build/outputs/apk/debug/*.apk' -exec cp {} "$GITHUB_WORKSPACE/out/" \;
+            while IFS= read -r -d '' apk; do
+              rel="${apk#"$D"/}"
+              safe="${rel//\//_}"
+              cp "$apk" "$OUT/$safe"
+            done < <(find "$D" -type f -path '*/build/outputs/apk/*/*.apk' -print0)
           else
-            cp "$D"/out/*.apk "$GITHUB_WORKSPACE/out/"
+            if compgen -G "$D/out/*.apk" > /dev/null; then
+              cp "$D"/out/*.apk "$OUT/"
+            fi
           fi
-          ls -l "$GITHUB_WORKSPACE/out"
-          test -n "$(ls "$GITHUB_WORKSPACE"/out/*.apk 2>/dev/null)"
+          if ! compgen -G "$OUT/*.apk" > /dev/null; then
+            echo "::error::Build completed but no APK files were found. Check module outputs and build logs."
+            exit 1
+          fi
+          echo "Collected APK files:"
+          ls -lh "$OUT"/*.apk
 
       - name: Keep the APKs as a build artifact
         uses: actions/upload-artifact@v4
@@ -438,7 +457,7 @@ echo "Done: $ROOT/out/$PKG.apk"
 (function () {
 'use strict';
 
-var KEY_B64 = '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';
+// V3: never embed a signing keystore in client-side source or generated project ZIPs.
 var $ = function (id) { return document.getElementById(id); };
 var WF_TPL = $('wfTpl').textContent.replace(/^\s*\n/, '');
 var PLAIN_SH = $('plainSh').textContent.replace(/^\s*\n/, '');
@@ -904,8 +923,7 @@ async function prepare() {
     }
 
     if (o.key) {
-      putFile(entries, info.root + '.github/debug.keystore', b64ToBytes(KEY_B64), MODE_FILE);
-      changes.push('Added a stable signing key (.github/debug.keystore)');
+      changes.push('Workflow will read ANDROID_DEBUG_KEYSTORE_BASE64 from GitHub Actions secrets; no key is stored in the ZIP');
     }
 
     var wf = makeWorkflow(o);
