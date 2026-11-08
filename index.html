@@ -276,17 +276,30 @@ jobs:
             ./build-plain.sh
           fi
 
-      - name: Collect the APKs
+      - name: Collect all APKs
+        shell: bash
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/out"
+          set -euo pipefail
+          OUT="$GITHUB_WORKSPACE/out"
           D="${{ steps.find.outputs.dir }}"
+          mkdir -p "$OUT"
           if [ "${{ steps.find.outputs.type }}" = "gradle" ]; then
-            find "$D" -path '*/build/outputs/apk/debug/*.apk' -exec cp {} "$GITHUB_WORKSPACE/out/" \;
+            while IFS= read -r -d '' apk; do
+              rel="${apk#"$D"/}"
+              safe="${rel//\//_}"
+              cp "$apk" "$OUT/$safe"
+            done < <(find "$D" -type f -path '*/build/outputs/apk/*/*.apk' -print0)
           else
-            cp "$D"/out/*.apk "$GITHUB_WORKSPACE/out/"
+            if compgen -G "$D/out/*.apk" > /dev/null; then
+              cp "$D"/out/*.apk "$OUT/"
+            fi
           fi
-          ls -l "$GITHUB_WORKSPACE/out"
-          test -n "$(ls "$GITHUB_WORKSPACE"/out/*.apk 2>/dev/null)"
+          if ! compgen -G "$OUT/*.apk" > /dev/null; then
+            echo "::error::Build completed but no APK files were found. Check module outputs and build logs."
+            exit 1
+          fi
+          echo "Collected APK files:"
+          ls -lh "$OUT"/*.apk
 
       - name: Keep the APKs as a build artifact
         uses: actions/upload-artifact@v4
