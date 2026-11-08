@@ -248,15 +248,18 @@ jobs:
           gradle-version: "@@GRADLE@@"
 
       - name: Configure private debug signing key (optional)
-        if: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 != '' }}
         env:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
         run: |
           set -eu
-          mkdir -p "$HOME/.android"
-          printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
-          chmod 600 "$HOME/.android/debug.keystore"
-          echo "Private stable debug signing key configured"
+          if [ -n "${ANDROID_DEBUG_KEYSTORE_BASE64:-}" ]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+            echo "Private stable debug signing key configured"
+          else
+            echo "No custom signing secret; using the temporary runner debug key"
+          fi
 
       - name: Build
         working-directory: ${{ steps.find.outputs.dir }}
