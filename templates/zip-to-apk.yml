@@ -144,7 +144,7 @@ jobs:
         run: |
           set -uo pipefail
           cd "$PROJECT_DIR"
-          if [ -f ./gradlew ]; then
+          if [ "$WRAPPER" = "yes" ] && [ -f ./gradlew ]; then
             chmod +x ./gradlew
             ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
             RC=$?
@@ -187,7 +187,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: apk-$GITHUB_RUN_NUMBER
+          name: apk-${{ github.run_number }}
           path: out/*.apk
           if-no-files-found: error
           retention-days: 7
@@ -195,10 +195,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-diagnostics-$GITHUB_RUN_NUMBER
+          name: build-diagnostics-${{ github.run_number }}
           path: |
-            $RUNNER_TEMP/gradle-build.log
-            $RUNNER_TEMP/diagnosis.txt
+            ${{ runner.temp }}/gradle-build.log
+            ${{ runner.temp }}/diagnosis.txt
           if-no-files-found: ignore
           retention-days: 7
       - name: Remove source ZIP after successful build
