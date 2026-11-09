@@ -1,4 +1,4 @@
-# ZIP_TO_APK_BUILDER_V1
+# ZIP_TO_APK_BUILDER_V2
 name: ZIP to APK Builder
 on:
   push:
@@ -150,7 +150,7 @@ jobs:
           else
             CMD="gradle"
           fi
-          "$CMD" --no-daemon --stacktrace assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
+          "$CMD" --no-daemon --console=plain --stacktrace assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
           RC=$?
           if [ "$RC" -ne 0 ]; then
             if grep -Eqi 'SDK location not found|failed to find target|platforms;android|licenses.*not accepted' "$RUNNER_TEMP/gradle-build.log"; then CODE=E003
@@ -164,7 +164,7 @@ jobs:
           RELEASE_TASKS=$("$CMD" tasks --all --console=plain 2>/dev/null | grep -oE 'assemble[A-Za-z0-9]*Release' | sort -u || true)
           for TASK in $RELEASE_TASKS; do
             echo "Trying optional release variant: $TASK"
-            if "$CMD" --no-daemon --stacktrace "$TASK" 2>&1 | tee -a "$RUNNER_TEMP/gradle-build.log"; then
+            if "$CMD" --no-daemon --console=plain --stacktrace "$TASK" 2>&1 | tee -a "$RUNNER_TEMP/gradle-build.log"; then
               echo "Optional release variant succeeded: $TASK" | tee -a "$RUNNER_TEMP/diagnosis.txt"
             else
               echo "E007: Optional release variant skipped ($TASK); debug APK remains available." | tee -a "$RUNNER_TEMP/diagnosis.txt"
