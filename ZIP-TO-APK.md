@@ -39,7 +39,7 @@ The page installs `.github/workflows/zip-to-apk-builder.yml` automatically, then
 - Uses an existing Gradle wrapper when present; otherwise installs Gradle 8.9.
 - Installs Android SDK platform/build tools and uses JDK 17.
 - For a simple Android source ZIP without Gradle files, it attempts to generate a minimal Android Gradle application configuration for Java/Kotlin sources.
-- Runs `assembleDebug` and collects APK files from Gradle output folders.
+- Always builds `assembleDebug`, then attempts available release tasks when Gradle exposes them; a release signing failure does not cancel a successful debug APK. It collects all APKs from Gradle output folders.
 - Publishes APKs as a private GitHub Release and as a seven-day Actions artifact.
 - Removes the uploaded source ZIP only after a successful build.
 
