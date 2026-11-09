@@ -1,0 +1,190 @@
+# ZIP_TO_APK_BUILDER_V1
+name: ZIP to APK Builder
+on:
+  push:
+    paths: ['incoming/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout private project
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate ZIP and detect project
+        id: inspect
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_PATH="$(find incoming -maxdepth 1 -type f -name '*.zip' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+          [ -n "$ZIP_PATH" ] || { echo "::error::E001 No ZIP found in incoming/"; exit 1; }
+          echo "ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/project"
+          python3 - "$ZIP_PATH" "$RUNNER_TEMP/project" <<'PY'
+          import sys,zipfile
+          from pathlib import PurePosixPath
+          src,dest=sys.argv[1:]
+          with zipfile.ZipFile(src) as z:
+              items=z.infolist()
+              if len(items)>25000 or sum(x.file_size for x in items)>1500*1024*1024: raise SystemExit("E001 ZIP exceeds safety limits")
+              for x in items:
+                  p=PurePosixPath(x.filename); mode=(x.external_attr>>16)&0o170000
+                  if p.is_absolute() or ".." in p.parts or mode==0o120000: raise SystemExit("E001 Unsafe ZIP entry: "+x.filename)
+              z.extractall(dest)
+          PY
+          ROOT="$RUNNER_TEMP/project"
+          while [ "$(find "$ROOT" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1 ] && [ -d "$(find "$ROOT" -mindepth 1 -maxdepth 1 -type d | head -n1)" ]; do
+            ONLY="$(find "$ROOT" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+            if [ -n "$(find "$ONLY" -maxdepth 5 \( -name settings.gradle -o -name settings.gradle.kts -o -name AndroidManifest.xml \) -print -quit)" ]; then ROOT="$ONLY"; else break; fi
+          done
+          python3 - "$ROOT" "$GITHUB_ENV" <<'PY'
+          import sys,re
+          from pathlib import Path
+          root,out=Path(sys.argv[1]),sys.argv[2]
+          settings=list(root.rglob("settings.gradle"))+list(root.rglob("settings.gradle.kts"))
+          settings=[p for p in settings if "build" not in p.parts]
+          generated="no"
+          if settings:
+              project=min(settings,key=lambda p:len(p.relative_to(root).parts)).parent
+          else:
+              manifests=[p for p in root.rglob("AndroidManifest.xml") if "build" not in p.parts]
+              if not manifests: raise SystemExit("E001 No AndroidManifest.xml or Gradle settings file found")
+              manifest=min(manifests,key=lambda p:len(p.relative_to(root).parts))
+              mr=manifest.parent
+              project=mr.parent.parent if mr.name=="main" and mr.parent.name=="src" else (mr.parent if mr.name=="src" else mr)
+              sources=list(project.rglob("*.java"))+list(project.rglob("*.kt"))
+              if not sources: raise SystemExit("E001 Manifest found, but no Java/Kotlin sources")
+              mt=manifest.read_text(errors="ignore")
+              m=re.search(r'\bpackage\s*=\s*["\']([^"\']+)',mt); pkg=m.group(1) if m else ""
+              if not pkg:
+                  for f in sources:
+                      m=re.search(r'^\s*package\s+([\w.]+)',f.read_text(errors="ignore"),re.M)
+                      if m: pkg=m.group(1); break
+              if not pkg: raise SystemExit("E001 Cannot infer Android namespace")
+              rel=lambda p:p.relative_to(project).as_posix()
+              srcdirs=[p for p in [project/"src/main/java",project/"src/main/kotlin",project/"src"] if p.exists()]
+              if not srcdirs: srcdirs=[mr]
+              kotlin=any(p.suffix==".kt" for p in sources)
+              (project/"settings.gradle").write_text("pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\ndependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }\nrootProject.name = 'ImportedAndroidProject'\n")
+              plugin="    id 'org.jetbrains.kotlin.android' version '2.0.21'\n" if kotlin else ""
+              src=", ".join("'"+rel(p)+"'" for p in srcdirs)
+              res="            res.srcDirs = ['"+rel(mr/"res")+"']\n" if (mr/"res").exists() else ""
+              assets="            assets.srcDirs = ['"+rel(mr/"assets")+"']\n" if (mr/"assets").exists() else ""
+              (project/"build.gradle").write_text("""plugins {
+              id 'com.android.application' version '8.7.3'
+          """+plugin+"""}
+          android {
+              namespace '"""+pkg+"""'
+              compileSdk 35
+              defaultConfig {
+                  applicationId '"""+pkg+"""'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+              sourceSets { main {
+                  manifest.srcFile '"""+rel(manifest)+"""'
+                  java.srcDirs = ["""+src+"""]
+          """+res+assets+"""        } }
+          }
+          """)
+              generated="yes"
+          wrappers=list(project.rglob("gradlew"))
+          usable=any((p.parent/"gradle/wrapper/gradle-wrapper.jar").exists() for p in wrappers)
+          props=list(project.rglob("gradle-wrapper.properties")); gv="8.9"
+          for p in props:
+              m=re.search(r'gradle-([0-9]+\.[0-9]+(?:\.[0-9]+)?)-',p.read_text(errors="ignore"))
+              if m: gv=m.group(1); break
+          with open(out,"a") as f:
+              f.write("PROJECT_DIR="+str(project)+"\n")
+              f.write("WRAPPER="+("yes" if usable else "no")+"\n")
+              f.write("GENERATED_CONFIG="+generated+"\n")
+          print("Project:",project,"generated Gradle config:",generated,"usable wrapper:",usable)
+          PY
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android platform and build tools
+        run: |
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          [ -n "$SDK" ] || SDK="$ANDROID_SDK_ROOT"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Set up fallback Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd "$PROJECT_DIR"
+          if [ -f ./gradlew ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
+            RC=$?
+          else
+            gradle --no-daemon --stacktrace assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"
+            RC=$?
+          fi
+          if [ "$RC" -ne 0 ]; then
+            if grep -Eqi 'SDK location not found|failed to find target|platforms;android|licenses.*not accepted' "$RUNNER_TEMP/gradle-build.log"; then CODE=E003
+            elif grep -Eqi 'Could not resolve|Could not find .*:[^ ]+|Could not GET|UnknownHostException' "$RUNNER_TEMP/gradle-build.log"; then CODE=E004
+            elif grep -Eqi 'Minimum supported Gradle version|Gradle version .* is required|Unsupported class file major version' "$RUNNER_TEMP/gradle-build.log"; then CODE=E002
+            else CODE=E005; fi
+            echo "$CODE: Gradle build failed (exit $RC)" | tee "$RUNNER_TEMP/diagnosis.txt"
+            exit "$RC"
+          fi
+          echo "Build succeeded" > "$RUNNER_TEMP/diagnosis.txt"
+      - name: Collect APK files
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          find "$PROJECT_DIR" -type f -path '*/build/outputs/apk/*/*.apk' -print0 | while IFS= read -r -d '' f; do
+            NAME="$(printf '%s' "$f" | sed "s#^$PROJECT_DIR/##; s#/#_#g")"
+            cp "$f" "out/$NAME"
+          done
+          compgen -G 'out/*.apk' >/dev/null || { echo "E006: No APK found in Gradle output folders" | tee "$RUNNER_TEMP/diagnosis.txt"; exit 1; }
+      - name: Publish APK release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "zip-build-$GITHUB_RUN_NUMBER" out/*.apk --title "APK build $GITHUB_RUN_NUMBER" --notes "Built from uploaded ZIP · commit $GITHUB_SHA"
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-$GITHUB_RUN_NUMBER
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-$GITHUB_RUN_NUMBER
+          path: |
+            $RUNNER_TEMP/gradle-build.log
+            $RUNNER_TEMP/diagnosis.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Remove source ZIP after successful build
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse "HEAD:$ZIP_PATH")"
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$ZIP_PATH" -f message="chore: remove processed ZIP" -f sha="$SHA" -f branch="$GITHUB_REF_NAME"
