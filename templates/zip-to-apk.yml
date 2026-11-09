@@ -52,7 +52,13 @@ jobs:
           if settings:
               project=min(settings,key=lambda p:len(p.relative_to(root).parts)).parent
           else:
-              manifests=[p for p in root.rglob("AndroidManifest.xml") if "build" not in p.parts]
+              existing_builds=[p for p in list(root.rglob("build.gradle"))+list(root.rglob("build.gradle.kts")) if "build" not in p.parts]
+              android_builds=[p for p in existing_builds if re.search(r"com\.android\.(?:application|library)|com\.android\.tools\.build",p.read_text(errors="ignore"))]
+              if android_builds:
+                  project=min(android_builds,key=lambda p:len(p.relative_to(root).parts)).parent
+                  (project/"settings.gradle").write_text("pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\nrootProject.name = 'ImportedAndroidProject'\n")
+              else:
+                  manifests=[p for p in root.rglob("AndroidManifest.xml") if "build" not in p.parts]
               if not manifests: raise SystemExit("E001 No AndroidManifest.xml or Gradle settings file found")
               manifest=min(manifests,key=lambda p:len(p.relative_to(root).parts))
               mr=manifest.parent
@@ -101,9 +107,13 @@ jobs:
           for p in props:
               m=re.search(r'gradle-([0-9]+\.[0-9]+(?:\.[0-9]+)?)-',p.read_text(errors="ignore"))
               if m: gv=m.group(1); break
+          build_text="\n".join(p.read_text(errors="ignore") for p in list(project.rglob("build.gradle"))+list(project.rglob("build.gradle.kts")))
+          sdk_match=re.search(r'compileSdk(?:Version)?\s*(?:=\s*)?(\d+)',build_text)
+          compile_sdk=sdk_match.group(1) if sdk_match else "35"
           with open(out,"a") as f:
               f.write("PROJECT_DIR="+str(project)+"\n")
               f.write("WRAPPER="+("yes" if usable else "no")+"\n")
+              f.write("COMPILE_SDK="+compile_sdk+"\n")
               f.write("GENERATED_CONFIG="+generated+"\n")
           print("Project:",project,"generated Gradle config:",generated,"usable wrapper:",usable)
           PY
@@ -120,7 +130,7 @@ jobs:
           SDK="$ANDROID_HOME"
           [ -n "$SDK" ] || SDK="$ANDROID_SDK_ROOT"
           yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-$COMPILE_SDK" "build-tools;35.0.0"
       - name: Set up fallback Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
