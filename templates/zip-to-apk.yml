@@ -48,18 +48,17 @@ jobs:
           root,out=Path(sys.argv[1]),sys.argv[2]
           settings=list(root.rglob("settings.gradle"))+list(root.rglob("settings.gradle.kts"))
           settings=[p for p in settings if "build" not in p.parts]
+          build_files=[p for p in list(root.rglob("build.gradle"))+list(root.rglob("build.gradle.kts")) if "build" not in p.parts]
+          android_builds=[p for p in build_files if re.search(r"com\.android\.(?:application|library)|com\.android\.tools\.build",p.read_text(errors="ignore"))]
           generated="no"
           if settings:
               project=min(settings,key=lambda p:len(p.relative_to(root).parts)).parent
+          elif android_builds:
+              project=min(android_builds,key=lambda p:len(p.relative_to(root).parts)).parent
+              (project/"settings.gradle").write_text("pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\nrootProject.name = 'ImportedAndroidProject'\n")
           else:
-              existing_builds=[p for p in list(root.rglob("build.gradle"))+list(root.rglob("build.gradle.kts")) if "build" not in p.parts]
-              android_builds=[p for p in existing_builds if re.search(r"com\.android\.(?:application|library)|com\.android\.tools\.build",p.read_text(errors="ignore"))]
-              if android_builds:
-                  project=min(android_builds,key=lambda p:len(p.relative_to(root).parts)).parent
-                  (project/"settings.gradle").write_text("pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }\nrootProject.name = 'ImportedAndroidProject'\n")
-              else:
-                  manifests=[p for p in root.rglob("AndroidManifest.xml") if "build" not in p.parts]
-              if not manifests: raise SystemExit("E001 No AndroidManifest.xml or Gradle settings file found")
+              manifests=[p for p in root.rglob("AndroidManifest.xml") if "build" not in p.parts]
+              if not manifests: raise SystemExit("E001 No AndroidManifest.xml or Gradle Android project found")
               manifest=min(manifests,key=lambda p:len(p.relative_to(root).parts))
               mr=manifest.parent
               project=mr.parent.parent if mr.name=="main" and mr.parent.name=="src" else (mr.parent if mr.name=="src" else mr)
